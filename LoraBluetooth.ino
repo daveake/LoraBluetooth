@@ -13,8 +13,8 @@
 // UNCOMMENT ONE OF THESE LINES
 
 // #define TTGO
-#define OLEDV1
-// #define OLEDV2
+// #define OLEDV1
+#define OLEDV2
 // #define LORAGO
 
 // If you have Bluetooth, set the device names:
@@ -373,8 +373,10 @@ void setup()
   // EEPROM
   EEPROM.begin(EEPROM_SIZE);  
    
-  pinMode(LED, OUTPUT);
-  digitalWrite(LED, 1);
+  #ifdef LED
+    pinMode(LED, OUTPUT);
+    digitalWrite(LED, 1);
+  #endif
   
   Serial.begin(115200);
   
@@ -433,7 +435,9 @@ if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3c, false, false))
 
   SetParametersFromLoRaMode(Settings.LoRaMode);
 
+#ifdef LED
   digitalWrite(LED, 0);
+#endif  
 
 #ifdef BLUE
   // BLE
@@ -963,11 +967,13 @@ void CheckBT()
 
 void CheckRx()
 {
+#ifdef LED
   if ((LEDOff > 0) && (millis() >= LEDOff))
   {
     digitalWrite(LED, LOW);
     LEDOff = 0;
   }
+#endif
   
   if (digitalRead(LORA_DIO0))
   {
@@ -976,8 +982,10 @@ void CheckRx()
     int Bytes, SNR, RSSI, i;
     long Altitude;
 
-    digitalWrite(LED, 1);
-    LEDOff = millis() + 1000;
+    #ifdef LED
+      digitalWrite(LED, 1);
+      LEDOff = millis() + 1000;
+    #endif
     
     Bytes = receiveMessage(Message);
     
