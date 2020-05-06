@@ -14,8 +14,8 @@
 
 // #define TTGO
 // #define OLEDV1
-#define OLEDV2
-// #define LORAGO
+// #define OLEDV2
+#define LORAGO
 
 // If you have Bluetooth, set the device names:
 #define BLE_DEVICE 	"HAB BLE"
@@ -40,11 +40,11 @@
 	#define OLED_SCL    15
 	#define SCREEN_WIDTH 128
 	#define SCREEN_HEIGHT 64
-	#define LORA_NSS           18                // Comment out to disable LoRa code
+	#define LORA_NSS           18                
 	#define LORA_DIO0          26                
-	#define SCK                 5     // GPIO5  -- SX1278's SCK
-	#define MISO               19     // GPIO19 -- SX1278's MISO
-	#define MOSI               27     // GPIO27 -- SX1278's MOSI
+	#define SCK                 5
+	#define MISO               19
+	#define MOSI               27
 	#define LED       2
 #endif
 	
@@ -57,19 +57,17 @@
 	#define OLED_SCL    22
 	#define SCREEN_WIDTH 128
 	#define SCREEN_HEIGHT 64
-	#define LORA_NSS           18                // Comment out to disable LoRa code
+	#define LORA_NSS           18                
 	#define LORA_DIO0          26                
-	#define SCK                 5     // GPIO5  -- SX1278's SCK
-	#define MISO               19     // GPIO19 -- SX1278's MISO
-	#define MOSI               27     // GPIO27 -- SX1278's MOSI
+	#define SCK                 5
+	#define MISO               19
+	#define MOSI               27
 #endif
 	
 #ifdef LORAGO
-	#define LORA_NSS           18                // Comment out to disable LoRa code
-	#define LORA_DIO0          26                
-	#define SCK                 5     // GPIO5  -- SX1278's SCK
-	#define MISO               19     // GPIO19 -- SX1278's MISO
-	#define MOSI               27     // GPIO27 -- SX1278's MOSI
+	#define LORA_NSS            8                // Comment out to disable LoRa code
+	#define LORA_DIO0           7                
+  #define LORA_RST            4
 #endif
 	
 //------
@@ -219,10 +217,12 @@ void SetParametersFromLoRaMode(int LoRaMode)
 {
   Settings.LowDataRateOptimize = 0;
 
+#ifdef OLED
   display.setCursor(0,20);
   display.print("Mode: ");
   display.print(LoRaMode);
   display.display();
+#endif
   
   Settings.LoRaMode = LoRaMode;
   
@@ -287,6 +287,7 @@ void SetParametersFromLoRaMode(int LoRaMode)
   }
 }
 
+#ifdef BLUE
 #define SERVICE_UUID           "6E400001-B5A3-F393-E0A9-E50E24DCCA9E" // UART service UUID
 #define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 #define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
@@ -299,7 +300,7 @@ class MyServerCallbacks: public BLEServerCallbacks {
     void onDisconnect(BLEServer* pServer) {
       BLEConnected = false;
     }
-};
+}
 
 class MyCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
@@ -320,7 +321,8 @@ class MyCallbacks: public BLECharacteristicCallbacks {
         ProcessCommand(Line);
       }
     }
-};
+}
+#endif
 
 void LoadDefaults()
 {
@@ -362,7 +364,9 @@ void StoreSettings(void)
     EEPROM.write(i+2, *ptr);
   }
 
+#ifdef ESP32
   EEPROM.commit();
+#endif  
 }
 
 
@@ -371,7 +375,9 @@ void StoreSettings(void)
 void setup()
 {
   // EEPROM
+#ifdef ESP32
   EEPROM.begin(EEPROM_SIZE);  
+#endif
    
   #ifdef LED
     pinMode(LED, OUTPUT);
@@ -511,10 +517,12 @@ void UpdateClient(void)
     sprintf(Line, "CurrentRSSI=%d\r\n", CurrentRSSI);
     SendToHosts(Line);
 
+#ifdef OLED
     sprintf(Line, "RSSI: %3d ", CurrentRSSI);
     display.setCursor(50,20);
     display.print(Line);
     display.display();
+#endif    
 
     UpdateClientAt = millis() + 1000;
   }
@@ -1037,6 +1045,7 @@ void CheckRx()
       sprintf(Line, "Message=%s\r\n", Message);
       SendToHosts(Line);
           
+#ifdef OLED
       strncpy(ShortMessage, (char *)Message, 20);
       ShortMessage[20] = '\0';
       display.setCursor(0,32);
@@ -1053,6 +1062,7 @@ void CheckRx()
       display.print(ShortMessage);
 
       display.display();          
+#endif      
     }
     else if (Message[0] == '%')
     {
@@ -1080,19 +1090,27 @@ void CheckRx()
     else
     {
       Serial.print("Hex=");
+#ifdef BLUE
       SerialBT.print("Hex=");
+#endif      
       for (i=0; i<Bytes; i++)
       {
         if (Message[i] < 0x10)
         {
           Serial.print("0");
+#ifdef BLUE
           SerialBT.print("0");
+#endif          
         } 
         Serial.print(Message[i], HEX);
+#ifdef BLUE
         SerialBT.print("0");
+#endif          
       }
       Serial.println();
+#ifdef BLUE
       SerialBT.println();
+#endif          
     }
   }
 }
@@ -1188,12 +1206,13 @@ void SetLoRaFrequency()
 //  Serial.print("FrequencyValue is ");
 //  Serial.println(FrequencyValue);
 
+#ifdef OLED
   display.setCursor(0,10);
   display.print("Freq: ");
   display.print(Settings.Frequency, 4);
   display.print(" MHz");
   display.display();
-
+#endif
 
   writeRegister(0x06, (FrequencyValue >> 16) & 0xFF);    // Set frequency
   writeRegister(0x07, (FrequencyValue >> 8) & 0xFF);
@@ -1240,8 +1259,12 @@ void setupRFM98(void)
   pinMode(LORA_NSS, OUTPUT);
   pinMode(LORA_DIO0, INPUT);
 
+#ifdef ESP32
   SPI.begin(SCK,MISO,MOSI,LORA_NSS);
-  
+#else
+  SPI.begin();
+#endif
+
   startReceiving();
   
   Serial.println("Setup Complete");
