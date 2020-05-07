@@ -7,85 +7,94 @@
 
 // The receiver can be connected to a phone or tablet or PC, using Bluetooth or BLE (Bluetooth Low Power) or USB Serial so in order to view the received telemetry.
 
-// Power management
-// #include <axp20x.h>
-
 // UNCOMMENT ONE OF THESE LINES
 
-// #define TTGO
+  #define TTGO
 // #define OLEDV1
 // #define OLEDV2
-#define LORAGO
+// #define LORAGO
 
 // If you have Bluetooth, set the device names:
-#define BLE_DEVICE 	"HAB BLE"
-#define BT_DEVICE	"HAB BT"
+#define BLE_DEVICE   "HAB BLE"
+#define BT_DEVICE "HAB BT"
 
 //---------
 //
 // Board definitions
 
 #ifdef TTGO
-	#define ESP32
-	#define BLUE
-	#define OLED
+  #define ESP32
+  #define BLUE
+  #define AXP
+  #define LORA_NSS           18
+  #define LORA_RST           14
+  #define LORA_DIO0          26                
+  #define SCK                 5
+  #define MISO               19
+  #define MOSI               27
 #endif
-	
+  
 #ifdef OLEDV1
-	#define ESP32
-	#define BLUE
-	#define OLED
-	#define OLED_RESET  16
-	#define OLED_SDA    4
-	#define OLED_SCL    15
-	#define SCREEN_WIDTH 128
-	#define SCREEN_HEIGHT 64
-	#define LORA_NSS           18                
-	#define LORA_DIO0          26                
-	#define SCK                 5
-	#define MISO               19
-	#define MOSI               27
-	#define LED       2
+  #define ESP32
+  #define BLUE
+  #define OLED
+  #define OLED_RESET         16
+  #define OLED_SDA            4
+  #define OLED_SCL           15
+  #define SCREEN_WIDTH      128
+  #define SCREEN_HEIGHT      64
+  #define LORA_NSS           18                
+  #define LORA_DIO0          26                
+  #define SCK                 5
+  #define MISO               19
+  #define MOSI               27
+  #define LED                 2
 #endif
-	
+  
 #ifdef OLEDV2
-	#define ESP32
-	#define BLUE
-	#define OLED
-	#define OLED_RESET  16
-	#define OLED_SDA    21
-	#define OLED_SCL    22
-	#define SCREEN_WIDTH 128
-	#define SCREEN_HEIGHT 64
-	#define LORA_NSS           18                
-	#define LORA_DIO0          26                
-	#define SCK                 5
-	#define MISO               19
-	#define MOSI               27
+  #define ESP32
+  #define BLUE
+  #define OLED
+  #define OLED_RESET         16
+  #define OLED_SDA           21
+  #define OLED_SCL           22
+  #define SCREEN_WIDTH      128
+  #define SCREEN_HEIGHT      64
+  #define LORA_NSS           18                
+  #define LORA_DIO0          26                
+  #define SCK                 5
+  #define MISO               19
+  #define MOSI               27
 #endif
-	
+  
 #ifdef LORAGO
-	#define LORA_NSS            8                // Comment out to disable LoRa code
-	#define LORA_DIO0           7                
+  #define LORA_NSS            8                // Comment out to disable LoRa code
+  #define LORA_DIO0           7                
   #define LORA_RST            4
 #endif
-	
+
+// Power management
+#ifdef AXP
+  #include <axp20x.h>
+#endif  
+
+  
 //------
 //
 // Bluetooth
 
-#ifdef BLUE	
-	#include <BLEDevice.h>
-	#include <BLEServer.h>
-	#include <BLEUtils.h>
-	#include <BLE2902.h>
-	#include <BluetoothSerial.h>
-#endif	
+#ifdef BLUE 
+  #include <BLEDevice.h>
+  #include <BLEServer.h>
+  #include <BLEUtils.h>
+  #include <BLE2902.h>
+  #include <BluetoothSerial.h>
+#endif  
 
 #ifdef OLED
-	#include <Adafruit_GFX.h>
-	#include <Adafruit_SSD1306.h>
-#endif	
+  #include <Adafruit_GFX.h>
+  #include <Adafruit_SSD1306.h>
+#endif  
 
 
 #include <string.h>
@@ -116,14 +125,14 @@ struct TSettings
 
 
 #ifdef BLUE
-	BLECharacteristic *pCharacteristic;
-	bool BLEConnected = false;
-#endif	
+  BLECharacteristic *pCharacteristic;
+  bool BLEConnected = false;
+#endif  
 
 unsigned long LEDOff=0;
 
 #ifdef OLED
-	Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
+  Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
 #endif
 
 #define REG_FIFO                    0x00
@@ -206,10 +215,12 @@ unsigned long LEDOff=0;
 
 
 #ifdef BLUE
-	BluetoothSerial SerialBT;
-#endif	
+  BluetoothSerial SerialBT;
+#endif  
 
-// AXP20X_Class axp;
+#ifdef AXP
+  AXP20X_Class axp;
+#endif
 
 char Hex[] = "0123456789ABCDEF";
 
@@ -300,7 +311,7 @@ class MyServerCallbacks: public BLEServerCallbacks {
     void onDisconnect(BLEServer* pServer) {
       BLEConnected = false;
     }
-}
+};
 
 class MyCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
@@ -321,7 +332,7 @@ class MyCallbacks: public BLECharacteristicCallbacks {
         ProcessCommand(Line);
       }
     }
-}
+};
 #endif
 
 void LoadDefaults()
@@ -374,52 +385,83 @@ void StoreSettings(void)
 
 void setup()
 {
-  // EEPROM
-#ifdef ESP32
-  EEPROM.begin(EEPROM_SIZE);  
-#endif
-   
-  #ifdef LED
-    pinMode(LED, OUTPUT);
-    digitalWrite(LED, 1);
-  #endif
-  
   Serial.begin(115200);
   
   Serial.println("");
   Serial.println("HAB LoRa Receiver V1.0");
   Serial.println("");
 
-  // OLED
-#ifdef OLED
-  pinMode(OLED_RST, OUTPUT);
-  digitalWrite(OLED_RST, LOW);
-  delay(20);
-  digitalWrite(OLED_RST, HIGH);  
-
-  Wire.begin(OLED_SDA, OLED_SCL);
-
-if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3c, false, false))
-  {
-    // Address 0x3C for 128x32
-    Serial.println(F("SSD1306 allocation failed"));
-    for(;;); // Don't proceed, loop forever
-  }  
-  display.clearDisplay();  
-  display.setTextColor(WHITE, 0);
-  display.setTextSize(1);
-  display.setCursor(0,0);
-  display.print("LoRa Receiver V1.0");
-
-  #ifdef BLUE
-    display.setCursor(0,32);
-    display.print(" BT Device ");  display.print(BT_DEVICE);
-    display.setCursor(0,42);
-    display.print("BLE Device ");  display.print(BLE_DEVICE);
+  // EEPROM
+  #ifdef ESP32
+    EEPROM.begin(EEPROM_SIZE);  
   #endif
+   
+  #ifdef LED
+    pinMode(LED, OUTPUT);
+    digitalWrite(LED, 1);
+  #endif
+
+  #ifdef AXP
+    Wire.begin(21, 22);
+    if (!axp.begin(Wire, AXP192_SLAVE_ADDRESS))
+    {
+      Serial.println("AXP192 Begin PASS");
+    }
+    else
+    {
+      Serial.println("AXP192 Begin FAIL");
+    }  
+
+    axp.setPowerOutPut(AXP192_LDO2, AXP202_ON);
+    axp.setPowerOutPut(AXP192_LDO3, AXP202_ON);
+    axp.setPowerOutPut(AXP192_DCDC2, AXP202_ON);
+    axp.setPowerOutPut(AXP192_EXTEN, AXP202_ON);
+    axp.setPowerOutPut(AXP192_DCDC1, AXP202_ON);
+    axp.setDCDC1Voltage(3300);
   
-  display.display();
-#endif
+    Serial.printf("DCDC1: %s\n", axp.isDCDC1Enable() ? "ENABLE" : "DISABLE");
+    Serial.printf("DCDC2: %s\n", axp.isDCDC2Enable() ? "ENABLE" : "DISABLE");
+    Serial.printf("LDO2: %s\n", axp.isLDO2Enable() ? "ENABLE" : "DISABLE");
+    Serial.printf("LDO3: %s\n", axp.isLDO3Enable() ? "ENABLE" : "DISABLE");
+    Serial.printf("DCDC3: %s\n", axp.isDCDC3Enable() ? "ENABLE" : "DISABLE");
+    Serial.printf("Exten: %s\n", axp.isExtenEnable() ? "ENABLE" : "DISABLE");
+
+    if (axp.isChargeing())
+    {
+      Serial.println("Charging");
+    }    
+  #endif
+
+  // OLED
+  #ifdef OLED
+    pinMode(OLED_RST, OUTPUT);
+    digitalWrite(OLED_RST, LOW);
+    delay(20);
+    digitalWrite(OLED_RST, HIGH);  
+
+    Wire.begin(OLED_SDA, OLED_SCL);
+
+    if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3c, false, false))
+    {
+      // Address 0x3C for 128x32
+      Serial.println(F("SSD1306 allocation failed"));
+      for(;;); // Don't proceed, loop forever
+    }  
+    display.clearDisplay();  
+    display.setTextColor(WHITE, 0);
+    display.setTextSize(1);
+    display.setCursor(0,0);
+    display.print("LoRa Receiver V1.0");
+
+    #ifdef BLUE2
+      display.setCursor(0,32);
+      display.print(" BT Device ");  display.print(BT_DEVICE);
+      display.setCursor(0,42);
+      display.print("BLE Device ");  display.print(BLE_DEVICE);
+    #endif
+  
+    display.display();
+  #endif
 
   if ((EEPROM.read(0) == 'D') && (EEPROM.read(1) == 'A'))
   {
@@ -434,55 +476,48 @@ if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3c, false, false))
     StoreSettings();
   }
   
-
   SetParametersFromLoRaMode(Settings.LoRaMode);
 
   setupRFM98();
 
   SetParametersFromLoRaMode(Settings.LoRaMode);
 
-#ifdef LED
-  digitalWrite(LED, 0);
-#endif  
+  #ifdef LED
+    digitalWrite(LED, 0);
+  #endif  
 
-#ifdef BLUE
-  // BLE
-  // Create the BLE Device
-  BLEDevice::init(BLE_DEVICE);
-  BLEDevice::setPower(ESP_PWR_LVL_P7);
+  #ifdef BLUE3
+    // BLE
+    // Create the BLE Device
+    BLEDevice::init(BLE_DEVICE);
+    BLEDevice::setPower(ESP_PWR_LVL_P7);
 
-  // BT
-  SerialBT.begin(BT_DEVICE);
+    // BT
+    SerialBT.begin(BT_DEVICE);
 
-  // Create the BLE Server
-  BLEServer *pServer = BLEDevice::createServer();
-  pServer->setCallbacks(new MyServerCallbacks());
+    // Create the BLE Server
+    BLEServer *pServer = BLEDevice::createServer();
+    pServer->setCallbacks(new MyServerCallbacks());
 
-  // Create the BLE Service
-  BLEService *pService = pServer->createService(SERVICE_UUID);
+    // Create the BLE Service
+    BLEService *pService = pServer->createService(SERVICE_UUID);
 
-  // Create a BLE Characteristic
-  pCharacteristic = pService->createCharacteristic(
-                      CHARACTERISTIC_UUID_TX,
-                      BLECharacteristic::PROPERTY_NOTIFY
-                    );
+    // Create a BLE Characteristic
+    pCharacteristic = pService->createCharacteristic(CHARACTERISTIC_UUID_TX, BLECharacteristic::PROPERTY_NOTIFY);
                       
-  pCharacteristic->addDescriptor(new BLE2902());
+    pCharacteristic->addDescriptor(new BLE2902());
 
-  BLECharacteristic *pCharacteristic = pService->createCharacteristic(
-                                         CHARACTERISTIC_UUID_RX,
-                                         BLECharacteristic::PROPERTY_WRITE
-                                       );
+    BLECharacteristic *pCharacteristic = pService->createCharacteristic(CHARACTERISTIC_UUID_RX, BLECharacteristic::PROPERTY_WRITE);
 
-  pCharacteristic->setCallbacks(new MyCallbacks());
+    pCharacteristic->setCallbacks(new MyCallbacks());
 
-  // Start the service
-  pService->start();
+    // Start the service
+    pService->start();
 
-  // Start advertising
-  pServer->getAdvertising()->start();
-  Serial.println("BLE Server Ready");
-#endif  
+    // Start advertising
+    pServer->getAdvertising()->start();
+    Serial.println("BLE Server Ready");
+  #endif  
 }
 
 void loop()
@@ -517,12 +552,12 @@ void UpdateClient(void)
     sprintf(Line, "CurrentRSSI=%d\r\n", CurrentRSSI);
     SendToHosts(Line);
 
-#ifdef OLED
+  #ifdef OLED
     sprintf(Line, "RSSI: %3d ", CurrentRSSI);
     display.setCursor(50,20);
     display.print(Line);
     display.display();
-#endif    
+  #endif    
 
     UpdateClientAt = millis() + 1000;
   }
@@ -535,29 +570,29 @@ void SendToHosts(char *Line)
 
   Serial.print(Line);
   
-#ifdef BLUE
-  SerialBT.print(Line);
-   
-  if (BLEConnected)
-  {
-    ptr = Line;
-    Done = 0;
-    while (!Done)
+  #ifdef BLUE
+    SerialBT.print(Line);
+     
+    if (BLEConnected)
     {
-      pCharacteristic->setValue(ptr);
-      pCharacteristic->notify();
-
-      if (strlen(ptr) > 20)
+      ptr = Line;
+      Done = 0;
+      while (!Done)
       {
-        ptr += 20;
-      }
-      else
-      {
-        Done = 1;
+        pCharacteristic->setValue(ptr);
+        pCharacteristic->notify();
+  
+        if (strlen(ptr) > 20)
+        {
+          ptr += 20;
+        }
+        else
+        {
+          Done = 1;
+        }
       }
     }
-  }
-#endif  
+  #endif  
 }
 
 double FrequencyReference(void)
@@ -630,7 +665,7 @@ int receiveMessage(unsigned char *message)
     // printf ("%d bytes in packet\n", Bytes);
 
     // printf("RSSI = %d\n", readRegister(REG_RSSI) - 137);
-	
+  
     writeRegister(REG_FIFO_ADDR_PTR, currentAddr);   
     // now loop over the fifo getting the data
     for(i = 0; i < Bytes; i++)
