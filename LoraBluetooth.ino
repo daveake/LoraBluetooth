@@ -453,7 +453,7 @@ void setup()
     display.setCursor(0,0);
     display.print("LoRa Receiver V1.0");
 
-    #ifdef BLUE2
+    #ifdef BLUE
       display.setCursor(0,32);
       display.print(" BT Device ");  display.print(BT_DEVICE);
       display.setCursor(0,42);
@@ -486,7 +486,7 @@ void setup()
     digitalWrite(LED, 0);
   #endif  
 
-  #ifdef BLUE3
+  #ifdef BLUE
     // BLE
     // Create the BLE Device
     BLEDevice::init(BLE_DEVICE);
