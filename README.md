@@ -17,6 +17,22 @@ I have written several programs suitable for decoding this telemetry, uploading 
 See my github account and blog for details about this host software for Windows, Mac, Raspberry Pi, iPad, iPhone, Android phone or tablet.
 
 
+Libraries
+=========
+
+To build LoraBluetooth you may need various libraries into your Arduino IDE.  For boards with an OLED:
+
+	- Adafruit GFX Library
+	- Adafruit SSD1306 Library
+
+These Libraries can be added via the Ardunio IDE menu: Sketch -> Include Library -> Manage Libraries…
+
+For boards that use the AXP202X power chip, ie the TTGO V1+ T-Beam, the AXP202X Library is required:
+
+https://github.com/lewisxhe/AXP202X_Library
+
+This library can be added via the Ardunio IDE menu: Sketch -> Include Library -> Add .zip Library…
+
 
 Serial Protocol
 ===============
