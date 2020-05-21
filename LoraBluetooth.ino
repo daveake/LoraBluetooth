@@ -12,7 +12,7 @@
 
 // UNCOMMENT ONE AND ONLY ONE OF THESE LINES
 
-  #define TTGO
+  #define TBEAM
 // #define OLEDV1
 // #define OLEDV2
 // #define LORAGO
@@ -25,7 +25,7 @@
 //
 // Board definitions
 
-#ifdef TTGO
+#ifdef TBEAM
   #define ESP32
   #define BLUE
   #define AXP
@@ -391,7 +391,7 @@ void StoreSettings(void)
 
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(57600);
   
   Serial.println("");
   Serial.println("HAB LoRa Receiver V1.1");
