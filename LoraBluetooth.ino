@@ -7,7 +7,10 @@
 
 // The receiver can be connected to a phone or tablet or PC, using Bluetooth or BLE (Bluetooth Low Power) or USB Serial so in order to view the received telemetry.
 
-// UNCOMMENT ONE OF THESE LINES
+// Additionally, if the device includes a GPS receiver, then this can be used to get the local GPS position, meaning that the device can be used with (for example)
+// a programmable bluetooth watch to show the distance and direction to the payload.
+
+// UNCOMMENT ONE AND ONLY ONE OF THESE LINES
 
   #define TTGO
 // #define OLEDV1
@@ -32,6 +35,9 @@
   #define SCK                 5
   #define MISO               19
   #define MOSI               27
+  #define GPSSerial     Serial1
+  #define GPS_TX             34
+  #define GPS_RX             12
 #endif
   
 #ifdef OLEDV1
@@ -388,7 +394,7 @@ void setup()
   Serial.begin(115200);
   
   Serial.println("");
-  Serial.println("HAB LoRa Receiver V1.0");
+  Serial.println("HAB LoRa Receiver V1.1");
   Serial.println("");
 
   // EEPROM
@@ -463,6 +469,10 @@ void setup()
     display.display();
   #endif
 
+  #ifdef GPSSerial
+    SetupGPS();
+  #endif
+
   if ((EEPROM.read(0) == 'D') && (EEPROM.read(1) == 'A'))
   {
     // Load settings from EEPROM
@@ -530,6 +540,10 @@ void loop()
   
   CheckRx();
   
+  #ifdef GPSSerial
+    CheckGPS();
+  #endif
+
   UpdateClient();
 }
 
