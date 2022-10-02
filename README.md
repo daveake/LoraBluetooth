@@ -1,4 +1,4 @@
-This is generic firmware to make various devices into HAB LoRa receivers.  Currently hash settings for:
+This is generic firmware to make various devices into HAB LoRa receivers.  Currently has settings for:
 
 - TTGO T-Beam
 - TTGO LoRa OLED V1
@@ -76,6 +76,8 @@ Bandwidth value strings can be 7K8, 10K4, 15K6, 20K8, 31K25, 41K7, 62K5, 125K, 2
 
 History
 =======
+
+02/10/2022	V2.02	- Fixed SNR bug.
 
 23/09/2016	V1.1	- Added Hex=... message for any packet that is not ASCII telemetry
 					- Added LoRa modes 3-7K8

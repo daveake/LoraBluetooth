@@ -1,4 +1,4 @@
-// This is generic firmware to make various devices into HAB LoRa receivers.  Currently hash settings for:
+// This is generic firmware to make various devices into HAB LoRa receivers.  Currently has settings for:
 
 // TTGO T-Beam
 // TTGO LoRa OLED V1
@@ -10,9 +10,13 @@
 // Additionally, if the device includes a GPS receiver, then this can be used to get the local GPS position, meaning that the device can be used with (for example)
 // a programmable bluetooth watch to show the distance and direction to the payload.
 
+#define DEVICE "ESP32 LoRa BT/USB Receiver"
+#define VERSION "2.02"
+
 // UNCOMMENT ONE AND ONLY ONE OF THESE LINES
 
-  #define TBEAM
+#define TBEAMOLED
+// #define TBEAM
 // #define OLEDV1
 // #define OLEDV2
 // #define LORAGO
@@ -24,6 +28,13 @@
 //---------
 //
 // Board definitions
+
+#ifdef TBEAMOLED
+  #define TBEAM
+  #define OLED
+  #define OLED_SDA           21
+  #define OLED_SCL           22
+#endif
 
 #ifdef TBEAM
   #define ESP32
@@ -47,8 +58,6 @@
   #define OLED_RST         16
   #define OLED_SDA            4
   #define OLED_SCL           15
-  #define SCREEN_WIDTH      128
-  #define SCREEN_HEIGHT      64
   #define LORA_NSS           18                
   #define LORA_DIO0          26                
   #define SCK                 5
@@ -84,6 +93,10 @@
 #ifdef AXP
   #include <axp20x.h>
 #endif  
+
+#define OLED_ADDRESS            0x3C
+#define SCREEN_WIDTH            128
+#define SCREEN_HEIGHT           64
 
   
 //------
@@ -139,7 +152,7 @@ struct TSettings
 unsigned long LEDOff=0;
 
 #ifdef OLED
-  Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
+  Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire); // , OLED_RST);
 #endif
 
 #define REG_FIFO                    0x00
@@ -167,6 +180,7 @@ unsigned long LEDOff=0;
 
 // MODES
 #define RF96_MODE_RX_CONTINUOUS     0x85
+#define RF96_MODE_TX                0x83
 #define RF96_MODE_SLEEP             0x80
 #define RF96_MODE_STANDBY           0x81
 
@@ -230,6 +244,7 @@ unsigned long LEDOff=0;
 #endif
 
 char Hex[] = "0123456789ABCDEF";
+int Sending=0;
 
 void SetParametersFromLoRaMode(int LoRaMode)
 {
@@ -395,7 +410,9 @@ void setup()
   Serial.begin(57600);
   
   Serial.println("");
-  Serial.println("HAB LoRa Receiver V1.1");
+  Serial.print(DEVICE);
+  Serial.print(' ');
+  Serial.println(VERSION);
   Serial.println("");
 
   // EEPROM
@@ -441,14 +458,16 @@ void setup()
 
   // OLED
   #ifdef OLED
-    pinMode(OLED_RST, OUTPUT);
-    digitalWrite(OLED_RST, LOW);
-    delay(20);
-    digitalWrite(OLED_RST, HIGH);  
+    #ifdef OLED_RST
+      pinMode(OLED_RST, OUTPUT);
+      digitalWrite(OLED_RST, LOW);
+      delay(20);
+      digitalWrite(OLED_RST, HIGH);  
+    #endif
 
     Wire.begin(OLED_SDA, OLED_SCL);
 
-    if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3c, false, false))
+    if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS, false, false))
     {
       // Address 0x3C for 128x32
       Serial.println(F("SSD1306 allocation failed"));
@@ -458,7 +477,8 @@ void setup()
     display.setTextColor(WHITE, 0);
     display.setTextSize(1);
     display.setCursor(0,0);
-    display.print("LoRa Receiver V1.0");
+    display.print("LoRa BT Receiver ");
+    display.print(VERSION);
 
     #ifdef BLUE
       display.setCursor(0,32);
@@ -538,14 +558,21 @@ void loop()
 #ifdef BLUE
   CheckBT();
 #endif
+
+  if (Sending)
+  {
+    CheckTx();
+  }
+  else
+  {
+    CheckRx();
   
-  CheckRx();
+    UpdateClient();
+  }
   
   #ifdef GPSSerial
     CheckGPS();
   #endif
-
-  UpdateClient();
 }
 
 void UpdateClient(void)
@@ -910,6 +937,13 @@ void SetLowOpt(char *Line)
   startReceiving();
 }
 
+void TransmitMessage(char *Line)
+{
+  ReplyOK();
+
+  SendLoRaPacket(Line);
+}
+
 void ProcessCommand(char *Line)
 {
   char Command;
@@ -944,6 +978,18 @@ void ProcessCommand(char *Line)
   else if (Command == 'L')
   {
     SetLowOpt(Line);
+  }
+  else if (Command == 'D')
+  {
+    SendDevice();
+  }
+  else if (Command == 'V')
+  {
+    SendVersion();
+  }
+  else if (Command == 'T')
+  {
+    TransmitMessage(Line);
   }
   else
   {
@@ -1037,6 +1083,7 @@ void CheckRx()
   {
     unsigned char Message[256];
     char Line[20];
+    int8_t RawSNR;
     int Bytes, SNR, RSSI, i;
     long Altitude;
 
@@ -1050,8 +1097,9 @@ void CheckRx()
     sprintf(Line, "FreqErr=%.1lf\r\n", FrequencyError()/1000.0);
     SendToHosts(Line);
 
-    SNR = readRegister(REG_PACKET_SNR);
-    SNR /= 4;
+    RawSNR = readRegister(REG_PACKET_SNR);
+    RawSNR /= 4;
+    SNR = RawSNR;
     
     if (Settings.Frequency > 525)
     {
@@ -1080,7 +1128,11 @@ void CheckRx()
 
     // Telemetry='$$LORA1,108,20:30:39,51.95027,-2.54445,00141,0,0,11*9B74
 
-    if (Message[0] == '$')
+    if (Bytes == 0)
+    {
+      // CRC error
+    }
+    else if (Message[0] == '$')
     {
        char ShortMessage[21];
        char Line[256];
@@ -1088,10 +1140,6 @@ void CheckRx()
       // Remove LF
       Message[strlen((char *)Message)-1] = '\0';
       
-//      Serial.print("Message=");
-//      Serial.println((char *)Message);
-//      SerialBT.print("Message=");
-//      SerialBT.println((char *)Message);
       sprintf(Line, "Message=%s\r\n", Message);
       SendToHosts(Line);
           
@@ -1118,7 +1166,7 @@ void CheckRx()
     {
       char *ptr, *ptr2;
 
-      Message[0] = '$';
+      // Message[0] = '$';
       
       ptr = (char *)Message;
       do
@@ -1126,13 +1174,10 @@ void CheckRx()
         if ((ptr2 = strchr(ptr, '\n')) != NULL)
         {
           *ptr2 = '\0';
-//          Serial.print("Message=");
-//          Serial.println(ptr);
-//          SerialBT.print("Message=");
-//          SerialBT.println(ptr);
-          SendToHosts("Message");
-          SendToHosts((char *)Message);
-          //SendToHosts("\r\n");
+          
+          sprintf(Line, "Message=%s\r\n", Message);
+          SendToHosts(Line);
+          
           ptr = ptr2 + 1;
         }
       } while (ptr2 != NULL);
@@ -1169,13 +1214,21 @@ void CheckRx()
 /////////////////////////////////////
 //    Method:   Change the mode
 //////////////////////////////////////
-void setMode(byte newMode)
+void SetLoRaMode(byte newMode)
 {
   if(newMode == currentMode)
     return;  
   
   switch (newMode) 
   {
+    case RF96_MODE_TX:
+      writeRegister(REG_LNA, LNA_OFF_GAIN);  // TURN LNA OFF FOR TRANSMITT
+      writeRegister(REG_PA_CONFIG, PA_MAX_UK);
+      writeRegister(REG_OPMODE, newMode);
+      currentMode = newMode; 
+      
+      break;
+          
     case RF96_MODE_RX_CONTINUOUS:
       writeRegister(REG_PA_CONFIG, PA_OFF_BOOST);  // TURN PA OFF FOR RECIEVE??
       writeRegister(REG_LNA, LNA_MAX_GAIN);  // LNA_MAX_GAIN);  // MAX GAIN FOR RECIEVE
@@ -1281,14 +1334,16 @@ void SetLoRaParameters()
 
 void startReceiving()
 {
-  setMode(RF96_MODE_SLEEP);
+  SetLoRaMode(RF96_MODE_SLEEP);
   writeRegister(REG_OPMODE,0x80);  
-  setMode(RF96_MODE_SLEEP);
+  SetLoRaMode(RF96_MODE_SLEEP);
 
   SetLoRaFrequency();
   
   SetLoRaParameters();
-  
+
+  writeRegister(REG_DIO_MAPPING_1, 0x00 );  // 00 00 00 00 maps DIO0 to RxDone
+
   writeRegister(REG_PAYLOAD_LENGTH, 255);
   writeRegister(REG_RX_NB_BYTES, 255);
   
@@ -1296,7 +1351,7 @@ void startReceiving()
   writeRegister(REG_FIFO_ADDR_PTR, 0);
   
   // Setup Receive Continous Mode
-  setMode(RF96_MODE_RX_CONTINUOUS);
+  SetLoRaMode(RF96_MODE_RX_CONTINUOUS);
 }
 
 void setupRFM98(void)
@@ -1317,5 +1372,90 @@ void setupRFM98(void)
 
   startReceiving();
   
-  Serial.println("Setup Complete");
+  // Serial.println("Setup Complete");
+}
+
+void SendLoRaPacket(char *buffer)
+{
+  int i, Length;
+
+#ifdef LED
+  digitalWrite(LED, HIGH);
+  LEDOff = 0;
+#endif
+  Length = strlen(buffer) + 1;
+  
+  // Serial.print("Sending "); Serial.print(Length);Serial.println(" bytes");
+  Serial.println("Tx=ON");
+  
+  SetLoRaMode(RF96_MODE_STANDBY);
+
+  writeRegister(REG_DIO_MAPPING_1, 0x40);    // 01 00 00 00 maps DIO0 to TxDone
+  writeRegister(REG_FIFO_TX_BASE_AD, 0x00);  // Update the address ptr to the current tx base address
+  writeRegister(REG_FIFO_ADDR_PTR, 0x00); 
+  if (Settings.ImplicitOrExplicit == EXPLICIT_MODE)
+  {
+    writeRegister(REG_PAYLOAD_LENGTH, Length);
+  }
+  
+  select();
+  // tell SPI which address you want to write to
+  SPI.transfer(REG_FIFO | 0x80);
+
+  // loop over the payload and put it on the buffer 
+  for (i = 0; i < Length; i++)
+  {
+    SPI.transfer(buffer[i]);
+  }
+  unselect();
+
+  // go into transmit mode
+  SetLoRaMode(RF96_MODE_TX);
+
+#ifdef OLED
+      display.setCursor(0,52);
+      display.print("<<< TRANSMITTING >>>");
+      display.display();          
+#endif    
+  
+  Sending = 1;
+}
+
+void CheckTx()
+{
+  if (digitalRead(LORA_DIO0))
+  {
+    Sending = 0;
+
+#ifdef LED
+    digitalWrite(LED, LOW);
+    LEDOff = 0;
+#endif
+
+#ifdef OLED
+      display.setCursor(0,52);
+      display.print("                    ");
+      display.display();          
+#endif    
+
+    Serial.println("Tx=OFF");
+
+    setupRFM98();
+
+    startReceiving();
+  }
+}
+
+void SendVersion(void)
+{
+  ReplyOK();
+  Serial.print("Version=");
+  Serial.println(VERSION);
+}
+
+void SendDevice(void)
+{
+  ReplyOK();
+  Serial.print("Device=");
+  Serial.println(DEVICE);
 }
